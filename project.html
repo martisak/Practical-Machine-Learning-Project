@@ -64,8 +64,8 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 </div>
 <div id="data-processing" class="section level1">
 <h1>Data processing</h1>
-<div id="loading-packages" class="section level2">
-<h2>Loading packages</h2>
+<div id="load-packages" class="section level2">
+<h2>Load packages</h2>
 <pre class="r"><code>require(caret)</code></pre>
 <pre><code>## Loading required package: caret
 ## Loading required package: lattice
@@ -85,26 +85,27 @@ require(dplyr)</code></pre>
 ##     intersect, setdiff, setequal, union</code></pre>
 <pre class="r"><code>set.seed(51159)</code></pre>
 </div>
-<div id="downloading-data" class="section level2">
-<h2>Downloading data</h2>
+<div id="download-data" class="section level2">
+<h2>Download data</h2>
 <pre class="r"><code>data_training_url &lt;- &quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;
 filename_training &lt;- &quot;pml-training.csv&quot;
 
 if (!file.exists(filename_training)){
   cat(&quot;File did not exist, downloading...\n&quot;)
   download.file(data_training_url, filename_training, method=&quot;curl&quot;)
-}
-
-data_testing_url &lt;- &quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
+}</code></pre>
+<pre><code>## File did not exist, downloading...</code></pre>
+<pre class="r"><code>data_testing_url &lt;- &quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
 filename_testing &lt;- &quot;pml-testing.csv&quot;
 
 if (!file.exists(filename_testing)){
   cat(&quot;File did not exist, downloading...\n&quot;)
   download.file(data_testing_url, filename_testing, method=&quot;curl&quot;)
 }</code></pre>
+<pre><code>## File did not exist, downloading...</code></pre>
 </div>
-<div id="reading-and-cleaning-data" class="section level2">
-<h2>Reading and cleaning data</h2>
+<div id="read-and-clean-data" class="section level2">
+<h2>Read and clean data</h2>
 <p>Read data from file and get rid of metadata and time related columns. There could still be a time dependancy, so we keep the timestamp but in POSIXct format. We remove all columns containing statistical measurements, such as average, standard deviation or maximum.</p>
 <pre class="r"><code>training &lt;- read.csv(&quot;pml-training.csv&quot;, stringsAsFactors=FALSE, na.strings=c(&quot;NA&quot;,&quot;&quot;), strip.white=T) %&gt;%
   mutate(timestamp = as.POSIXct(cvtd_timestamp, format=&quot;%d/%m/%Y %H:%M&quot;)) %&gt;%
@@ -134,24 +135,29 @@ validationSet &lt;- training[-inTrain,]</code></pre>
 <pre class="r"><code>myTimeControl &lt;- trainControl(method = &quot;cv&quot;,
                               number = 5)
 
+#myTimeControl &lt;- trainControl(method = &quot;timeslice&quot;,
+#                              initialWindow = 36,
+#                              horizon = 12,
+#                              fixedWindow = TRUE,
+#                              number = 2)
+
 fit &lt;- train(classe~.,
                     method=&quot;rf&quot;,
                     data=trainingSet,
                     preProc = c(&quot;center&quot;, &quot;scale&quot;),
-                    trControl = myTimeControl,
-                    maxdepth=5,
-                    nu=0.1)</code></pre>
-<pre><code>## Loading required package: randomForest
-## randomForest 4.6-10
-## Type rfNews() to see new features/changes/bug fixes.
-## Loading required namespace: e1071</code></pre>
+                    trControl = myTimeControl)</code></pre>
+<pre><code>## Loading required namespace: e1071</code></pre>
 </div>
 <div id="prediction" class="section level2">
 <h2>Prediction</h2>
-<pre class="r"><code>pred &lt;- predict(fit, newdata=validationSet)
-sum(pred == validationSet$classe) / length(pred)</code></pre>
+<pre class="r"><code>pred &lt;- predict(fit, newdata=validationSet)</code></pre>
+<pre><code>## Loading required package: randomForest
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.</code></pre>
+<pre class="r"><code>sum(pred == validationSet$classe) / length(pred)</code></pre>
 <pre><code>## [1] 0.9961</code></pre>
 <pre class="r"><code>confusionMatrix(validationSet$classe, pred)$table</code></pre>
+<pre><code>## Loading required namespace: e1071</code></pre>
 <pre><code>##           Reference
 ## Prediction    A    B    C    D    E
 ##          A 1671    3    0    0    0
@@ -159,7 +165,37 @@ sum(pred == validationSet$classe) / length(pred)</code></pre>
 ##          C    0    3 1020    3    0
 ##          D    0    0    6  958    0
 ##          E    0    0    0    0 1082</code></pre>
-<p>x`</p>
+<p>We can take look at the model to see which variables were most important.</p>
+<pre class="r"><code>varImp(fit)</code></pre>
+<pre><code>## rf variable importance
+## 
+##   only 20 most important variables shown (out of 53)
+## 
+##                      Overall
+## timestamp             100.00
+## roll_belt              99.98
+## pitch_forearm          56.39
+## yaw_belt               51.07
+## magnet_dumbbell_z      44.41
+## pitch_belt             43.12
+## magnet_dumbbell_y      42.46
+## roll_forearm           37.38
+## accel_dumbbell_y       18.67
+## roll_dumbbell          18.09
+## magnet_dumbbell_x      15.37
+## accel_forearm_x        14.31
+## magnet_belt_z          13.70
+## accel_belt_z           13.35
+## accel_dumbbell_z       12.83
+## magnet_belt_y          12.53
+## total_accel_dumbbell   11.51
+## gyros_belt_z           10.93
+## magnet_forearm_z        9.59
+## magnet_belt_x           9.38</code></pre>
+<p>The model is 0.9961% accurate on our validation set. Let’s use this model to do prediction using the testing set.</p>
+<pre class="r"><code>predict(fit, newdata=testing)</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
 </div>
 </div>
 

@@ -78,22 +78,20 @@ validationSet <- training[-inTrain,]
 
 ```{r fitting, cache=TRUE}
 
-#myTimeControl <- trainControl(method = "cv",
-#                              number = 5)
+myTimeControl <- trainControl(method = "cv",
+                              number = 5)
 
-myTimeControl <- trainControl(method = "timeslice",
-                              initialWindow = 36,
-                              horizon = 12,
-                              fixedWindow = TRUE,
-                              number = 2)
+#myTimeControl <- trainControl(method = "timeslice",
+#                              initialWindow = 36,
+#                              horizon = 12,
+#                              fixedWindow = TRUE,
+#                              number = 2)
 
 fit <- train(classe~.,
                     method="rf",
                     data=trainingSet,
                     preProc = c("center", "scale"),
-                    trControl = myTimeControl,
-                    maxdepth=5,
-                    nu=0.1)
+                    trControl = myTimeControl)
 ```
 
 ## Prediction
@@ -115,6 +113,7 @@ varImp(fit)
 The model is `r sum(pred == validationSet$classe) / length(pred)`% accurate on our validation set. Let's use this model to do prediction using the testing set.
 
 ```{r testset}
-predict(model, newdata=testing)
+predict(fit, newdata=testing)
 ```
+
 
