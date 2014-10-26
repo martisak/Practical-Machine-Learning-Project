@@ -113,7 +113,17 @@ varImp(fit)
 The model is `r sum(pred == validationSet$classe) / length(pred)`% accurate on our validation set. Let's use this model to do prediction using the testing set.
 
 ```{r testset}
-predict(fit, newdata=testing)
+answers <- predict(fit, newdata=testing)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
 ```
 
 
