@@ -1,0 +1,120 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Martin Isaksson"
+date: "October 25th, 2014"
+output: html_document
+---
+
+# Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+# Data processing
+
+## Load packages
+
+```{r packages}
+require(caret)
+require(ggplot2)
+require(dplyr)
+
+set.seed(51159)
+```
+
+## Download data
+
+```{r}
+data_training_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+filename_training <- "pml-training.csv"
+
+if (!file.exists(filename_training)){
+  cat("File did not exist, downloading...\n")
+  download.file(data_training_url, filename_training, method="curl")
+}
+
+data_testing_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+filename_testing <- "pml-testing.csv"
+
+if (!file.exists(filename_testing)){
+  cat("File did not exist, downloading...\n")
+  download.file(data_testing_url, filename_testing, method="curl")
+}
+```
+
+## Read and clean data
+
+Read data from file and get rid of metadata and time related columns. There could still be a time dependancy, so we keep the timestamp but in POSIXct format. We remove all columns containing statistical measurements, such as average, standard deviation or maximum.
+
+```{r}
+training <- read.csv("pml-training.csv", stringsAsFactors=FALSE, na.strings=c("NA",""), strip.white=T) %>%
+  mutate(timestamp = as.POSIXct(cvtd_timestamp, format="%d/%m/%Y %H:%M")) %>%
+  select(-user_name, -X, -raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window,
+  	-starts_with("avg_"), -starts_with("var_"), -starts_with("stddev_"), -starts_with("min_"),
+  	-starts_with("max_"), -starts_with("kurtosis_"), -starts_with("skewness_"), -starts_with("amplitude_"))
+
+testing <- read.csv("pml-testing.csv", stringsAsFactors=FALSE, na.strings=c("NA",""), strip.white=T) %>%
+  mutate(timestamp = as.POSIXct(cvtd_timestamp, format="%d/%m/%Y %H:%M")) %>%
+  select(-user_name, -X, -raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window,
+  	-starts_with("avg_"), -starts_with("var_"), -starts_with("stddev_"), -starts_with("min_"),
+  	-starts_with("max_"), -starts_with("kurtosis_"), -starts_with("skewness_"), -starts_with("amplitude_"))
+
+# Forcing character columns to numeric
+training[,2:(ncol(training)-2)] <- as.data.frame(sapply(training[,2:(ncol(training)-2)], as.numeric))
+testing[,2:(ncol(testing)-2)] <- as.data.frame(sapply(testing[,2:(ncol(testing)-2)], as.numeric))
+
+# Make sure the output is a factor (testing does not have that column)
+training$classe <- as.factor(training$classe)
+
+```
+
+## Fitting a model
+
+First we split the training set into a training set and a validation set. Then we fit a model to the training set. We have time series data here, so we should use a partitioning method that keeps continuious time series. See this [Stack Overflow question](http://stackoverflow.com/questions/22334561/createtimeslices-function-in-caret-package-in-r)
+
+```{r, cache=TRUE}
+inTrain <- createDataPartition(training$classe, p=0.7, list=F)
+trainingSet <- training[inTrain,]
+validationSet <- training[-inTrain,]
+```
+
+```{r fitting, cache=TRUE}
+
+#myTimeControl <- trainControl(method = "cv",
+#                              number = 5)
+
+myTimeControl <- trainControl(method = "timeslice",
+                              initialWindow = 36,
+                              horizon = 12,
+                              fixedWindow = TRUE,
+                              number = 2)
+
+fit <- train(classe~.,
+                    method="rf",
+                    data=trainingSet,
+                    preProc = c("center", "scale"),
+                    trControl = myTimeControl,
+                    maxdepth=5,
+                    nu=0.1)
+```
+
+## Prediction
+
+
+```{r prediction}
+
+pred <- predict(fit, newdata=validationSet)
+sum(pred == validationSet$classe) / length(pred)
+
+confusionMatrix(validationSet$classe, pred)$table
+```
+
+We can take look at the model to see which variables were most important.
+
+```{r}
+varImp(fit)
+```
+The model is `r sum(pred == validationSet$classe) / length(pred)`% accurate on our validation set. Let's use this model to do prediction using the testing set.
+
+```{r testset}
+predict(model, newdata=testing)
+```
+
